@@ -7,15 +7,14 @@ class EmailService:
         self.conf = ConnectionConfig(
             MAIL_USERNAME="resend",
             MAIL_PASSWORD=settings.resend_api_key,
-            MAIL_FROM=settings.mail_from,
+            MAIL_FROM=f"noreply@{settings.mail_from}",
             MAIL_PORT=587,
             MAIL_SERVER="smtp.resend.com",
             MAIL_FROM_NAME=settings.mail_from_name,
             MAIL_STARTTLS=True,
             MAIL_SSL_TLS=False,
             USE_CREDENTIALS=True,
-            VALIDATE_CERTS=True,
-            TEMPLATE_FOLDER="app/templates/emails"
+            VALIDATE_CERTS=True
         )
         self.fast_mail = FastMail(self.conf)
 
@@ -47,10 +46,12 @@ class EmailService:
         """
 
         message = MessageSchema(
-            subject="Verify your email address",
+            subject="Verify your email address - Anonymous Feedback",
             recipients=[email],
             body=html_content,
             subtype=MessageType.html
         )
 
         await self.fast_mail.send_message(message)
+
+email_service = EmailService()

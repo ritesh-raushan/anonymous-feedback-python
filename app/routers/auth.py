@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models.model import User
 
 from app.schemas.user_schema import UserCreate
-from app.utils.tokens import create_verification_token, email_service
+from app.utils.tokens import create_verification_token
+from app.utils.email_service import email_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -30,7 +31,9 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
         username=user.username,
         email=user.email,
         password = pwd_context.hash(user.password),
-        verification_token = verification_token
+        verification_token = verification_token,
+        is_verified=False,
+        is_accepting_messages=True,
     )
 
     db.add(new_user)
