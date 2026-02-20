@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from typing import Annotated
 from passlib.context import CryptContext
@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.model import User
 
 from app.schemas.user_schema import UserCreate
-from app.utils.tokens import create_verification_token
+from app.utils.tokens import create_verification_token, verify_verification_token
 from app.utils.email_service import email_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -56,3 +56,35 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
         "username": new_user.username,
         "email": new_user.email
     }
+
+@router.get("/verify-email", status_code=status.HTTP_200_OK, response_model=dict)
+async def verify_email(token: str, db: Session = Depends(get_db)):
+    email = verify_verification_token(token)
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.is_verified:
+        return {"message": "Email already verified"}
+    
+    # Validate token matches the one stored in database
+    if user.verification_token != token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification token")
+    
+    # Update user
+    user.is_verified = True
+    user.verification_token = None
+    db.commit()
+
+    # Send welcome email
+    try:
+        await email_service.send_welcome_email(
+            email=user.email,
+            username=user.username
+        )
+    except Exception as e:
+        print(f"Error sending welcome email: {e}")
+    
+    return {"message": "Email verified successfully"}
