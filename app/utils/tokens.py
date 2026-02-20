@@ -18,3 +18,27 @@ def verify_verification_token(token: str) -> Optional[str]:
         return email
     except JWTError:
         return None
+
+def create_access_token(data: dict, expiry_time: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    
+    if expiry_time:
+        expire = datetime.now(timezone.utc) + expiry_time
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    
+    to_encode.update({"exp": expire, "type": "access"})
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    return encoded_jwt
+
+def create_refresh_token(data: dict, expiry_time: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    
+    if expiry_time:
+        expire = datetime.now(timezone.utc) + expiry_time
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, settings.refresh_token_secret_key, algorithm=settings.algorithm)
+    return encoded_jwt

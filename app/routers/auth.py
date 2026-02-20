@@ -6,8 +6,13 @@ from passlib.context import CryptContext
 from app.database import get_db
 from app.models.model import User
 
-from app.schemas.user_schema import UserCreate
-from app.utils.tokens import create_verification_token, verify_verification_token
+from app.schemas.user_schema import UserCreate, UserLogin, UserResponse, LoginResponse, UserResponse
+from app.utils.tokens import (
+    create_verification_token, 
+    verify_verification_token,
+    create_access_token,
+    create_refresh_token
+)
 from app.utils.email_service import email_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -88,3 +93,50 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
         print(f"Error sending welcome email: {e}")
     
     return {"message": "Email verified successfully"}
+
+@router.post("/login", response_model=LoginResponse)
+async def login(user_credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
+    # Find user by email
+    user = db.query(User).filter(User.email == user_credentials.email).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Verify password
+    if not pwd_context.verify(user_credentials.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check if email is verified
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in"
+        )
+    
+    # Create access and refresh tokens
+    access_token = create_access_token(data={"sub": user.email, "user_id": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": user.email, "user_id": str(user.id)})
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=7 * 24 * 60 * 60  # 7 days
+    )
+    
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user)
+    )
