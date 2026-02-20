@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.model import User
 
 from app.schemas.user_schema import UserCreate
-from app.utils.tokens import create_verification_token
+from app.utils.tokens import create_verification_token, email_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -32,3 +32,24 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
         password = pwd_context.hash(user.password),
         verification_token = verification_token
     )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # Send the VErfification Mail
+    try:
+        await email_service.send_verification_email(
+            email=new_user.email,
+            username=new_user.username,
+            verification_token=verification_token
+        )
+    except Exception as e:
+        # Log error but don't fail registration
+        print(f"Error sending verification email: {e}")
+    
+    return {
+        "message": "User registered successfully. Please check your email to verify your account.",
+        "username": new_user.username,
+        "email": new_user.email
+    }
