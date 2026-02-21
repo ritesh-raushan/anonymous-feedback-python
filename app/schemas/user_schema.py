@@ -9,7 +9,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=6, description="Password must be at least 6 characters long")
 
 class UserLogin(BaseModel):
-    email: EmailStr = Field(..., description="Email")
+    identifier: str = Field(..., description="Email or Username")
     password: str = Field(..., min_length=6, description="Password")
 
 class UserResponse(BaseModel):

@@ -96,8 +96,10 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(user_credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
-    # Find user by email
-    user = db.query(User).filter(User.email == user_credentials.email).first()
+    # Find user by email or username
+    user = db.query(User).filter(
+        (User.email == user_credentials.identifier) | (User.username == user_credentials.identifier)
+    ).first()
     
     if not user:
         raise HTTPException(

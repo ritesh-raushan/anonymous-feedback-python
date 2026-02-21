@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from .models import model
 from .database import engine
-from .routers import auth
+from .routers import auth, feedback
 
 model.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 app.include_router(auth.router)
+app.include_router(feedback.router)
 
 @app.get("/")
 def root():
