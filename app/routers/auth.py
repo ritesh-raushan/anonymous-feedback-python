@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.orm import Session
 from typing import Annotated
 from passlib.context import CryptContext
+import logging
 
 from app.database import get_db
 from app.models.model import User
@@ -14,6 +15,9 @@ from app.utils.tokens import (
     create_refresh_token
 )
 from app.utils.email_service import email_service
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -54,7 +58,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
         )
     except Exception as e:
         # Log error but don't fail registration
-        print(f"Error sending verification email: {e}")
+        logger.error(f"Error sending verification email to {new_user.email}: {str(e)}", exc_info=True)
     
     return {
         "message": "User registered successfully. Please check your email to verify your account.",
@@ -90,7 +94,7 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
             username=user.username
         )
     except Exception as e:
-        print(f"Error sending welcome email: {e}")
+        logger.error(f"Error sending welcome email to {user.email}: {str(e)}", exc_info=True)
     
     return {"message": "Email verified successfully"}
 

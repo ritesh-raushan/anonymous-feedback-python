@@ -4,4 +4,7 @@ from typing import Optional
 import uuid
 
 class MessageCreate(BaseModel):
-    content: str = Field(..., min_length=1, max_length=1000, description="Message content upto characters")
+    content: str = Field(..., min_length=1, max_length=1000, description="Message content up to 1000 characters")
+
+class MessageAcceptanceToggle(BaseModel):
+    is_accepting_messages: bool = Field(..., description="Whether to accept anonymous messages")
