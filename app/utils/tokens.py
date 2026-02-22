@@ -42,3 +42,16 @@ def create_refresh_token(data: dict, expiry_time: Optional[timedelta] = None) ->
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.refresh_token_secret_key, algorithm=settings.algorithm)
     return encoded_jwt
+
+def verify_refresh_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify and decode refresh token.
+    Returns payload dict if valid, None if invalid/expired.
+    """
+    try:
+        payload = jwt.decode(token, settings.refresh_token_secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "refresh":
+            return None
+        return payload
+    except JWTError:
+        return None
