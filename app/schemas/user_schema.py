@@ -12,6 +12,9 @@ class UserLogin(BaseModel):
     identifier: str = Field(..., description="Email or Username")
     password: str = Field(..., min_length=6, description="Password")
 
+class ResendVerification(BaseModel):
+    email: EmailStr = Field(..., description="Email address to resend verification")
+
 class UserResponse(BaseModel):
     """Schema for user response."""
     id: uuid.UUID

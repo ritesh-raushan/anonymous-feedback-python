@@ -7,7 +7,7 @@ import logging
 from app.database import get_db
 from app.models.model import User
 
-from app.schemas.user_schema import UserCreate, UserLogin, UserResponse, LoginResponse, UserResponse
+from app.schemas.user_schema import UserCreate, UserLogin, UserResponse, LoginResponse, ResendVerification
 from app.utils.tokens import (
     create_verification_token, 
     verify_verification_token,
@@ -26,6 +26,38 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+@router.get("/check-username", response_model=dict)
+async def check_username_availability(username: str = Query(..., min_length=3, max_length=20), db: Session = Depends(get_db)):
+    # Check if username exists (case-insensitive)
+    existing_user = db.query(User).filter(User.username.ilike(username)).first()
+    
+    if existing_user:
+        return {
+            "available": False,
+            "message": "Username is already taken"
+        }
+    
+    return {
+        "available": True,
+        "message": "Username is available"
+    }
+
+@router.get("/check-email", response_model=dict)
+async def check_email_availability(email: str = Query(..., description="Email to check"), db: Session = Depends(get_db)):
+    # Check if email exists (case-insensitive)
+    existing_user = db.query(User).filter(User.email.ilike(email)).first()
+    
+    if existing_user:
+        return {
+            "available": False,
+            "message": "Email is already registered"
+        }
+    
+    return {
+        "available": True,
+        "message": "Email is available"
+    }
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def signup(user: UserCreate, db: Session = Depends(get_db)):
@@ -98,6 +130,52 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
         logger.error(f"Error sending welcome email to {user.email}: {str(e)}", exc_info=True)
     
     return {"message": "Email verified successfully"}
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK, response_model=dict)
+async def resend_verification_email(request_data: ResendVerification, db: Session = Depends(get_db)):
+    # Find user by email
+    user = db.query(User).filter(User.email == request_data.email).first()
+    
+    if not user:
+        # Security: Don't reveal if email exists or not
+        return {
+            "message": "If the email exists and is not verified, a verification email has been sent.",
+            "success": True
+        }
+    
+    # Check if user is already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified"
+        )
+    
+    # Generate new verification token
+    new_verification_token = create_verification_token(user.email)
+    
+    # Update user's verification token
+    user.verification_token = new_verification_token
+    db.commit()
+    
+    # Send verification email
+    try:
+        await email_service.send_verification_email(
+            email=user.email,
+            username=user.username,
+            verification_token=new_verification_token
+        )
+        logger.info(f"Verification email resent to {user.email}")
+    except Exception as e:
+        logger.error(f"Error resending verification email to {user.email}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email. Please try again later."
+        )
+    
+    return {
+        "message": "Verification email has been sent. Please check your inbox.",
+        "success": True
+    }
 
 @router.post("/login", response_model=LoginResponse)
 async def login(user_credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
