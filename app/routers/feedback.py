@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Annotated
+from typing import Annotated, List
 import logging
+import uuid
 
 from app.database import get_db
 from app.models.model import User, Message
-from app.schemas.message_schema import MessageCreate, MessageAcceptanceToggle
+from app.schemas.message_schema import MessageCreate, MessageAcceptanceToggle, MessageResponse
 from app.utils.auth import get_current_verified_user
 from app.schemas.user_schema import UserResponse
 
@@ -51,6 +52,76 @@ async def submit_feedback(username: str, message_data: MessageCreate, db: Sessio
     
     return {
         "message": "Feedback submitted successfully",
+        "success": True
+    }
+
+@router.get("/messages/count", response_model=dict)
+async def get_messages_count(
+    current_user: Annotated[User, Depends(get_current_verified_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Get the total count of messages received by the authenticated user.
+    Useful for dashboard statistics.
+    """
+    count = db.query(Message).filter(
+        Message.recipient_id == current_user.id
+    ).count()
+    
+    logger.info(f"User {current_user.username} has {count} total messages")
+    
+    return {"count": count}
+
+@router.get("/messages", response_model=List[MessageResponse])
+async def get_my_messages(
+    current_user: Annotated[User, Depends(get_current_verified_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Get all messages received by the authenticated user.
+    Messages are sorted by created_at in descending order (newest first).
+    """
+    messages = db.query(Message).filter(
+        Message.recipient_id == current_user.id
+    ).order_by(Message.created_at.desc()).all()
+    
+    logger.info(f"User {current_user.username} retrieved {len(messages)} messages")
+    
+    return messages
+
+@router.delete("/messages/{message_id}", status_code=status.HTTP_200_OK, response_model=dict)
+async def delete_message(
+    message_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_verified_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a specific message by ID.
+    Users can only delete their own messages (messages they received).
+    """
+    # Find the message
+    message = db.query(Message).filter(Message.id == message_id).first()
+    
+    if not message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Message not found"
+        )
+    
+    # Verify the message belongs to the current user
+    if message.recipient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to delete this message"
+        )
+    
+    db.delete(message)
+    db.commit()
+    
+    logger.info(f"User {current_user.username} deleted message {message_id}")
+    
+    return {
+        "message": "Message deleted successfully",
         "success": True
     }
 
